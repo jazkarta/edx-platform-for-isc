@@ -7,6 +7,7 @@ from datetime import datetime
 from model_utils import Choices
 from xmodule_django.models import CourseKeyField, NoneToEmptyManager
 from util.milestones_helpers import fulfill_course_milestone
+from config_models.models import ConfigurationModel
 
 """
 Certificates are created for a student and an offering of a course.
@@ -176,3 +177,8 @@ def certificate_status_for_student(student, course_id):
     except GeneratedCertificate.DoesNotExist:
         pass
     return {'status': CertificateStatuses.unavailable, 'mode': GeneratedCertificate.MODES.honor}
+
+
+class CertificateGenerationConfiguration(ConfigurationModel):
+    """Configure certificate generation."""
+    pass

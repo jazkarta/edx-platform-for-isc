@@ -15,6 +15,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.test import TestCase
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
+from certificates import api as certs_api
 from certificates.models import CertificateStatuses, CertificateGenerationConfiguration
 from certificates.tests.factories import GeneratedCertificateFactory
 from edxmako.middleware import MakoMiddleware

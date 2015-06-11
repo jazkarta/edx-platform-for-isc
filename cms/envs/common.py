@@ -169,6 +169,10 @@ sys.path.append(COMMON_ROOT / 'lib')
 GEOIP_PATH = REPO_ROOT / "common/static/data/geoip/GeoIP.dat"
 GEOIPV6_PATH = REPO_ROOT / "common/static/data/geoip/GeoIPv6.dat"
 
+################################## LTI INTEGRATION  ###############################
+# Namespace URI for Learning Technology Integration
+LTI_SPEC_NAMESPACE = 'http://www.imsglobal.org/services/ltiv1p1/xsd/imsoms_v1p0'
+
 ############################# WEB CONFIGURATION #############################
 # This is where we stick our compiled template files.
 import tempfile

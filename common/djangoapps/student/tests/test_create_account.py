@@ -2,6 +2,7 @@
 
 import ddt
 import unittest
+from django.contrib.auth import get_user
 from django.contrib.auth.models import User
 from django.test.client import RequestFactory
 from django.conf import settings
@@ -97,6 +98,15 @@ class TestCreateAccount(TestCase):
         settings.FEATURES['BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH']=False and doing external auth
         """
         self.base_extauth_bypass_sending_activation_email(False)
+
+    def test_not_logged_in_after_create(self):
+        """
+        Test user not automatically logged in after user creation
+        """
+        response = self.client.post(self.url, self.params)
+        self.assertEqual(response.status_code, 200)
+        user = get_user(self.client)
+        self.assertTrue(user.is_anonymous())
 
 
 @mock.patch.dict("student.models.settings.FEATURES", {"ENABLE_DISCUSSION_SERVICE": True})

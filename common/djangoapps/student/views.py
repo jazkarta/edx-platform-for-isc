@@ -1684,33 +1684,8 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
             # Seems like the core part of the request was successful.
             return JsonResponse(js, status=500)
 
-    # Immediately after a user creates an account, we log them in. They are only
-    # logged in until they close the browser. They can't log in again until they click
-    # the activation link from the email.
-    new_user = authenticate(username=post_vars['username'], password=post_vars['password'])
-    login(request, new_user)
-    request.session.set_expiry(0)
-
-    # TODO: there is no error checking here to see that the user actually logged in successfully,
-    # and is not yet an active user.
-    if new_user is not None:
-        AUDIT_LOG.info(u"Login success on new account creation - {0}".format(new_user.username))
-
-    if do_external_auth:
-        eamap.user = new_user
-        eamap.dtsignup = datetime.datetime.now(UTC)
-        eamap.save()
-        AUDIT_LOG.info("User registered with external_auth %s", post_vars['username'])
-        AUDIT_LOG.info('Updated ExternalAuthMap for %s to be %s', post_vars['username'], eamap)
-
-        if settings.FEATURES.get('BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH'):
-            log.info('bypassing activation email')
-            new_user.is_active = True
-            new_user.save()
-            AUDIT_LOG.info(u"Login activated on extauth account - {0} ({1})".format(new_user.username, new_user.email))
-
     dog_stats_api.increment("common.student.account_created")
-    redirect_url = try_change_enrollment(request)
+    redirect_url = None
 
     # Resume the third-party-auth pipeline if necessary.
     if third_party_auth.is_enabled() and pipeline.running(request):

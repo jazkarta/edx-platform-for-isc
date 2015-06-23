@@ -41,12 +41,6 @@ var CourseDetails = Backbone.Model.extend({
         if (newattrs.end_date && newattrs.enrollment_end && newattrs.end_date < newattrs.enrollment_end) {
             errors.enrollment_end = gettext("The enrollment end date cannot be after the course end date.");
         }
-        if (newattrs.intro_video && newattrs.intro_video !== this.get('intro_video')) {
-            if (this._videokey_illegal_chars.exec(newattrs.intro_video)) {
-                errors.intro_video = gettext("Key should only contain letters, numbers, _, or -");
-            }
-            // TODO check if key points to a real video using google's youtube api
-        }
         if(_.has(newattrs, 'entrance_exam_minimum_score_pct')){
             var range = {
                 min: 1,
@@ -74,8 +68,22 @@ var CourseDetails = Backbone.Model.extend({
         return this.videosourceSample();
     },
     videosourceSample : function() {
-        if (this.has('intro_video')) return "//www.youtube.com/embed/" + this.get('intro_video');
-        else return "";
+        if (! this.has('intro_video')) return "";
+
+        var video = this.get('intro_video'),
+            slashes = video.indexOf('//');
+        if (video[0] == '<') {
+            // Embed
+            return 'data:text/html;charset=utf-8,' + encodeURIComponent(video);
+        }
+        else if (slashes == -1) {
+            // Youtube
+            return "//www.youtube.com/embed/" + video;
+        }
+        else {
+            // Url
+            return video.substr(slashes);
+        }
     }
 });
 

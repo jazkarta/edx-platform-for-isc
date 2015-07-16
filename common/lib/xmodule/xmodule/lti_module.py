@@ -53,6 +53,7 @@ What is supported:
 
 import datetime
 from django.utils.timezone import UTC
+from django.conf import settings
 import logging
 import oauthlib.oauth1
 from oauthlib.oauth1.rfc5849 import signature
@@ -777,7 +778,7 @@ oauth_consumer_key="", oauth_signature="frVp4JuvT1mVXlxktiAUjQ7%2F1cw%3D"'}
 
         Raises Exception if can't parse.
         """
-        lti_spec_namespace = "http://www.imsglobal.org/services/ltiv1p1/xsd/imsoms_v1p0"
+        lti_spec_namespace = settings.LTI_SPEC_NAMESPACE
         namespaces = {'def': lti_spec_namespace}
 
         data = body.strip().encode('utf-8')

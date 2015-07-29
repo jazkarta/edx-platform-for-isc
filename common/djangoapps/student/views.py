@@ -26,11 +26,11 @@ from django.http import (HttpResponse, HttpResponseBadRequest, HttpResponseForbi
 from django.shortcuts import redirect
 from django.utils.translation import ungettext
 from django_future.csrf import ensure_csrf_cookie
-from django.utils.http import cookie_date, base36_to_int
+from django.utils.http import cookie_date, base36_to_int, urlquote_plus
 from django.utils.translation import ugettext as _, get_language
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -56,12 +56,14 @@ from student.models import (
     create_comments_service_user, PasswordHistory, UserSignupSource,
     DashboardConfiguration)
 from student.forms import PasswordResetFormNoActive
+from student.exceptions import UserEnrollmentError, UserAlreadyEnrolledError
 
 from verify_student.models import SoftwareSecurePhotoVerification, MidcourseReverificationWindow
 from certificates.models import CertificateStatuses, certificate_status_for_student
 from dark_lang.models import DarkLangConfig
 
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from opaque_keys.edx.locator import CourseLocator
@@ -405,10 +407,10 @@ def register_user(request, extra_context=None):
     email_opt_in = request.GET.get('email_opt_in')
 
     context = {
-        'course_id': course_id,
+        'course_id': course_id or request.session.get('enrollment_course_id'),
         'email_opt_in': email_opt_in,
         'email': '',
-        'enrollment_action': request.GET.get('enrollment_action'),
+        'enrollment_action': request.GET.get('enrollment_action') or request.session.get('enrollment_action'),
         'name': '',
         'running_pipeline': None,
         'pipeline_urls': auth_pipeline_urls(pipeline.AUTH_ENTRY_REGISTER, course_id=course_id, email_opt_in=email_opt_in),
@@ -419,6 +421,12 @@ def register_user(request, extra_context=None):
         'selected_provider': '',
         'username': '',
     }
+
+    # this was done as part of analytics in Aspen, removed in Birch, but we are using it for learning paths reg.
+    # For learning paths auto-enrollment, we will use this to complete enrollment after
+    # registration
+    # have this in aspen learning path version but don't think it's actually needed.
+    # request.session['registration_course_id'] = context['course_id']    
 
     if extra_context is not None:
         context.update(extra_context)
@@ -774,6 +782,38 @@ def _allow_donation(course_modes, course_id, enrollment):
     return donations_enabled and enrollment.mode in course_modes[course_id] and course_modes[course_id][enrollment.mode].min_price == 0
 
 
+def invite_to_courses(request, user, auto_enroll=True):
+    """
+    This method will create CourseEnrollmentAllowed records for the passed 
+    user for each course_id passed in the request, provided the user is 
+    allowed to enroll.
+    """
+    if 'course_id' not in request.POST:
+        return HttpResponseBadRequest(_("Course id not specified"))
+    course_id = request.POST.get("course_id")
+
+    try:
+        course_ids = validate_courses_for_enrollment(request)
+    except InvalidKeyError:
+        log.warning("User {username} tried to {action} with invalid course id: {course_id}".format(
+            username=user.username, action=action, course_id=request.POST.get("course_id")
+        ))
+        return HttpResponseBadRequest(_("Invalid course id"))
+
+    try:
+        for course_id in course_ids:
+            course = validate_course_for_user_enrollment(user, course_id)
+            cea = CourseEnrollmentAllowed(email=user.email, course_id=course.id, auto_enroll=True)
+            cea.save()
+    except UserEnrollmentError as e:
+        return HttpResponseBadRequest(str(e))
+
+    if 'enroll_course_id' in request.session:
+        del request.session['enroll_course_id']
+    if 'enroll_action' in request.session:
+        del request.session['enroll_action']
+
+
 def try_change_enrollment(request):
     """
     This method calls change_enrollment if the necessary POST
@@ -782,7 +822,15 @@ def try_change_enrollment(request):
     called after a registration or login, as secondary action.
     It should not interrupt a successful registration or login.
     """
-    if 'enrollment_action' in request.POST:
+    # we may be coming from a login after new account activation was made
+    # as part of a learning path enrollment.  we will have already enrolled if we
+    # have this in the session
+    if 'start_course_id' in request.session:
+        redirect_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+        del request.session['start_course_id']
+        return redirect_url
+
+    elif 'enrollment_action' in request.POST:
         try:
             enrollment_response = change_enrollment(request)
             # There isn't really a way to display the results to the user, so we just log it
@@ -845,6 +893,7 @@ def change_enrollment(request, check_access=True):
     """
     # Get the user
     user = request.user
+    multiple_enroll = False
 
     # Ensure the user is authenticated
     if not user.is_authenticated():
@@ -854,9 +903,10 @@ def change_enrollment(request, check_access=True):
     action = request.POST.get("enrollment_action")
     if 'course_id' not in request.POST:
         return HttpResponseBadRequest(_("Course id not specified"))
+    course_id = request.POST.get("course_id")
 
     try:
-        course_id = SlashSeparatedCourseKey.from_deprecated_string(request.POST.get("course_id"))
+        course_ids = validate_courses_for_enrollment(request)
     except InvalidKeyError:
         log.warning(
             "User {username} tried to {action} with invalid course id: {course_id}".format(
@@ -867,45 +917,64 @@ def change_enrollment(request, check_access=True):
         )
         return HttpResponseBadRequest(_("Invalid course id"))
 
-    if action == "enroll":
-        # Make sure the course exists
-        # We don't do this check on unenroll, or a bad course id can't be unenrolled from
-        if not modulestore().has_course(course_id):
-            log.warning("User {0} tried to enroll in non-existent course {1}"
-                        .format(user.username, course_id))
-            return HttpResponseBadRequest(_("Course id is invalid"))
+    if len(course_ids) > 1:
+        multiple_enroll = True
+    else:
+        course_id = course_ids[0]  
 
         # Record the user's email opt-in preference
         if settings.FEATURES.get('ENABLE_MKTG_EMAIL_OPT_IN'):
             _update_email_opt_in(request, user.username, course_id.org)
 
-        available_modes = CourseMode.modes_for_course_dict(course_id)
+    if action == "enroll":
+        try:
+            for course_id in course_ids:
+                course = validate_course_for_user_enrollment(user, course_id)
+                if multiple_enroll:
+                    # always enroll with default mode for multiple enrollment
+                    CourseEnrollment.enroll(user, course.id)
 
-        # Check that auto enrollment is allowed for this course
-        # (= the course is NOT behind a paywall)
-        if CourseMode.can_auto_enroll(course_id):
-            # Enroll the user using the default mode (honor)
-            # We're assuming that users of the course enrollment table
-            # will NOT try to look up the course enrollment model
-            # by its slug.  If they do, it's possible (based on the state of the database)
-            # for no such model to exist, even though we've set the enrollment type
-            # to "honor".
-            try:
-                CourseEnrollment.enroll(user, course_id, check_access=check_access)
-            except Exception:
-                return HttpResponseBadRequest(_("Could not enroll"))
+                available_modes = CourseMode.modes_for_course_dict(course_id)
 
-        # If we have more than one course mode or professional ed is enabled,
-        # then send the user to the choose your track page.
-        # (In the case of professional ed, this will redirect to a page that
-        # funnels users directly into the verification / payment flow)
-        if CourseMode.has_verified_mode(available_modes):
-            return HttpResponse(
-                reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
-            )
+                # Check that auto enrollment is allowed for this course
+                # (= the course is NOT behind a paywall)
+                if CourseMode.can_auto_enroll(course_id):
+                    # Enroll the user using the default mode (honor)
+                    # We're assuming that users of the course enrollment table
+                    # will NOT try to look up the course enrollment model
+                    # by its slug.  If they do, it's possible (based on the state of the database)
+                    # for no such model to exist, even though we've set the enrollment type
+                    # to "honor".
+                    try:
+                        CourseEnrollment.enroll(user, course_id, check_access=check_access)
+                    except Exception:
+                        return HttpResponseBadRequest(_("Could not enroll"))
 
-        # Otherwise, there is only one mode available (the default)
-        return HttpResponse()
+                # If we have more than one course mode or professional ed is enabled,
+                # then send the user to the choose your track page.
+                # (In the case of professional ed, this will redirect to a page that
+                # funnels users directly into the verification / payment flow)
+                if CourseMode.has_verified_mode(available_modes):
+                    return HttpResponse(
+                        reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
+                    )
+
+                # Otherwise, there is only one mode available (the default)
+                # return HttpResponse()
+
+            if 'enroll_course_id' in request.session:
+                del request.session['enroll_course_id']
+            if 'enroll_action' in request.session:
+                del request.session['enroll_action']
+            if 'start_course_id' in request.session:
+                redir_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+                del request.session['start_course_id']
+                return HttpResponse(redir_url)
+
+            return HttpResponse()
+
+        except UserEnrollmentError as e:
+            return HttpResponseBadRequest(str(e))
 
     elif action == "add_to_cart":
         # Pass the request handling to shoppingcart.views
@@ -927,6 +996,125 @@ def change_enrollment(request, check_access=True):
         return HttpResponse()
     else:
         return HttpResponseBadRequest(_("Enrollment action is invalid"))
+
+
+@require_POST
+def validate_courses_for_enrollment(request):
+    """
+    validate all course ids for enrollment
+    return SlashSeparatedCourseKeys
+    """
+
+    courses_param = request.POST.get('course_id', '')
+    courses = courses_param.split(';')
+
+    valid_courses = []
+    for course_id in courses:
+        if course_id == '':
+            continue
+        try:
+            valid_course_id = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+            valid_courses.append(valid_course_id)
+        except InvalidKeyError:
+            raise
+    return valid_courses
+
+
+def validate_course_for_user_enrollment(user, course_id):
+    # Make sure the course exists
+    try:
+        course = modulestore().get_course(course_id)
+        if not course:
+            raise ItemNotFoundError
+    except ItemNotFoundError:
+        log.warning("User {0} tried to enroll in non-existent course {1}"
+                    .format(user.username, course_id))
+        raise UserEnrollmentError(_("Course id {0} is invalid".format(course_id)))
+
+    if not has_access(user, 'enroll', course):
+        raise UserEnrollmentError(_("Enrollment for {0} is closed".format(course_id)))
+
+    # see if we have already filled up all allowed enrollments
+    is_course_full = CourseEnrollment.is_course_full(course)
+
+    if is_course_full:
+        raise UserEnrollmentError(_("Course id {0} is full".format(course_id)))
+
+    # check to see if user is currently enrolled in that course
+    if CourseEnrollment.is_enrolled(user, course_id):
+        raise UserAlreadyEnrolledError(_("Student is already enrolled"))
+
+    return course
+
+
+@require_POST
+def learning_path_start(request):
+    """
+    Enroll user in all courses in learning path.
+    Send a logged-in user to the first module of the chosen course.
+    Send an anonymous user through sign-in/registration process and enroll them
+    in all of the courses in the learning path.  Upon completion send them
+    to the first module of the chosen course.
+    """
+    start_course_id = request.POST.get('course_id', '')
+    if not start_course_id:
+        return HttpResponseBadRequest(_("No course ids passed to start"))
+
+    request.session['start_course_id'] = start_course_id
+    return learning_path_enrollment(request, ignore_already_enrolled=True)
+
+
+@require_POST
+def learning_path_enrollment(request, ignore_already_enrolled=False):
+    """
+    Enroll a logged-in user in all of the POSTed course ids.
+    Send an anonymous user through sign-in/registration process and enroll them in all
+    POSTed course ids
+    """
+    user = request.user
+    courses_param = request.POST.get('course_id', '')
+    if not courses_param:
+        return HttpResponseBadRequest(_("No course ids passed for enrollment"))
+
+    if not user.is_authenticated():
+        # Send along to login/register the user with course ids specified
+        # don't return HttpResponseForbidden or we'll lose our querystring
+        login_url = reverse('signin_user') + \
+            '?course_id={0}&enrollment_action=enroll'.format(urlquote_plus(courses_param))
+        # set session variables for the case the user will register... there are multiple
+        # pathways to registration after trying to enroll in the learning path courses
+        request.session['enrollment_course_id'] = courses_param
+        request.session['enrollment_action'] = "enroll"
+        return HttpResponse(login_url)
+
+    else:
+        try:
+            valid_courses = validate_courses_for_enrollment(request)
+        except InvalidKeyError:
+            log.warning("User {username} tried to {action} with invalid course id: {course_id}".format(
+                username=user.username, action=action, course_id=request.POST.get("course_id")
+            ))
+            return HttpResponseBadRequest(_("Invalid course id"))
+
+    try:
+        for course_id in valid_courses:
+            course = validate_course_for_user_enrollment(user, course_id)
+            CourseEnrollment.enroll(user, course.id)
+    except UserAlreadyEnrolledError:
+        if ignore_already_enrolled:
+            pass    
+    except UserEnrollmentError as e:
+        return HttpResponseBadRequest(str(e))
+
+    # redirect to first module of chosen course if there is a session variable
+    # storing the requested course_id, or redirect to first module of first course id 
+    # passed for enrollment
+    if 'start_course_id' in request.session:
+        redir_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+        del request.session['start_course_id']
+        return HttpResponse(redir_url)
+    else:
+        return HttpResponse()
 
 
 # pylint: disable=fixme
@@ -1612,6 +1800,11 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
 
     dog_stats_api.increment("common.student.account_created")
 
+    # if registration was performed after enrollment intent, set auto-enroll
+    # for the courses so that the student will enrolled on account activation
+    if 'enrollment_action' in post_vars:
+        invite_to_courses(request, user)
+
     email = post_vars['email']
 
     # Track the user's registration
@@ -1831,11 +2024,18 @@ def activate_account(request, key):
                 if cea.auto_enroll:
                     CourseEnrollment.enroll(student[0], cea.course_id)
 
+        # for enrollment via learning path 'Go to this course', redirect to courseware of that course
+        if 'start_course_id' in request.session:
+            course_start_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+        else:
+            course_start_url = ''
+           
         resp = render_to_response(
             "registration/activation_complete.html",
             {
                 'user_logged_in': user_logged_in,
-                'already_active': already_active
+                'already_active': already_active,
+                'continue_to_course_url': course_start_url
             }
         )
         return resp

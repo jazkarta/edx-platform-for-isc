@@ -1061,11 +1061,11 @@ def learning_path_start(request):
         return HttpResponseBadRequest(_("No course ids passed to start"))
 
     request.session['start_course_id'] = start_course_id
-    return learning_path_enrollment(request, ignore_already_enrolled=True)
+    return learning_path_enrollment(request)
 
 
 @require_POST
-def learning_path_enrollment(request, ignore_already_enrolled=False):
+def learning_path_enrollment(request):
     """
     Enroll a logged-in user in all of the POSTed course ids.
     Send an anonymous user through sign-in/registration process and enroll them in all
@@ -1098,11 +1098,12 @@ def learning_path_enrollment(request, ignore_already_enrolled=False):
 
     try:
         for course_id in valid_courses:
-            course = validate_course_for_user_enrollment(user, course_id)
-            CourseEnrollment.enroll(user, course.id)
-    except UserAlreadyEnrolledError:
-        if ignore_already_enrolled:
-            pass    
+            try:
+                course = validate_course_for_user_enrollment(user, course_id)
+                CourseEnrollment.enroll(user, course.id)
+            except UserAlreadyEnrolledError:
+                pass
+
     except UserEnrollmentError as e:
         return HttpResponseBadRequest(str(e))
 

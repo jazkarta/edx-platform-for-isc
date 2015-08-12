@@ -49,7 +49,6 @@
 @import 'views/verification';
 @import 'views/decoupled-verification';
 @import 'views/shoppingcart';
-@import 'course/auto-cert';
 
 // applications
 @import "discussion/utilities/variables";

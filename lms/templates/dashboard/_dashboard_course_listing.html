@@ -120,10 +120,10 @@ from courseware.grades import grade
     <section class="info">
       <hgroup>
         <p class="date-block">
-        % if course.may_certify() and cert_status['status'] == 'downloadable':
-        ${_("Course Completed")}
         % elif course.has_ended():
         ${_("Course Completed - {end_date}").format(end_date=course.end_datetime_text("DATE_TIME"))}
+        % elif course.may_certify() and cert_status['status'] == 'ready':
+        ${_("Course Completed")}        
         % elif course.has_started():
         ${_("Course Started - {start_date}").format(start_date=course.start_datetime_text("DATE_TIME"))}
         % elif course.start_date_is_still_default: # Course start date TBD

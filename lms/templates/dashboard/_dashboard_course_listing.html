@@ -120,7 +120,7 @@ from courseware.grades import grade
     <section class="info">
       <hgroup>
         <p class="date-block">
-        % if course.may_certify() and cert_status['status'] == 'processing':
+        % if course.may_certify() and cert_status['status'] == 'downloadable':
         ${_("Course Completed")}
         % elif course.has_ended():
         ${_("Course Completed - {end_date}").format(end_date=course.end_datetime_text("DATE_TIME"))}

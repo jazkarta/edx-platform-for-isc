@@ -1079,7 +1079,7 @@ def learning_path_enrollment(request):
     if not user.is_authenticated():
         # Send along to login/register the user with course ids specified
         # don't return HttpResponseForbidden or we'll lose our querystring
-        login_url = reverse('signin_user') + \
+        login_url = reverse('register_user') + \
             '?course_id={0}&enrollment_action=enroll'.format(urlquote_plus(courses_param))
         # set session variables for the case the user will register... there are multiple
         # pathways to registration after trying to enroll in the learning path courses

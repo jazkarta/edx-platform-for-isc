@@ -903,6 +903,7 @@ def change_enrollment(request, check_access=True):
     action = request.POST.get("enrollment_action")
     if 'course_id' not in request.POST:
         return HttpResponseBadRequest(_("Course id not specified"))
+
     course_id = request.POST.get("course_id")
 
     try:
@@ -934,33 +935,34 @@ def change_enrollment(request, check_access=True):
                     # always enroll with default mode for multiple enrollment
                     CourseEnrollment.enroll(user, course.id)
 
-                available_modes = CourseMode.modes_for_course_dict(course_id)
+                else:
+                    available_modes = CourseMode.modes_for_course_dict(course_id)
 
-                # Check that auto enrollment is allowed for this course
-                # (= the course is NOT behind a paywall)
-                if CourseMode.can_auto_enroll(course_id):
-                    # Enroll the user using the default mode (honor)
-                    # We're assuming that users of the course enrollment table
-                    # will NOT try to look up the course enrollment model
-                    # by its slug.  If they do, it's possible (based on the state of the database)
-                    # for no such model to exist, even though we've set the enrollment type
-                    # to "honor".
-                    try:
-                        CourseEnrollment.enroll(user, course_id, check_access=check_access)
-                    except Exception:
-                        return HttpResponseBadRequest(_("Could not enroll"))
+                    # Check that auto enrollment is allowed for this course
+                    # (= the course is NOT behind a paywall)
+                    if CourseMode.can_auto_enroll(course_id):
+                        # Enroll the user using the default mode (honor)
+                        # We're assuming that users of the course enrollment table
+                        # will NOT try to look up the course enrollment model
+                        # by its slug.  If they do, it's possible (based on the state of the database)
+                        # for no such model to exist, even though we've set the enrollment type
+                        # to "honor".
+                        try:
+                            CourseEnrollment.enroll(user, course_id, check_access=check_access)
+                        except Exception:
+                            return HttpResponseBadRequest(_("Could not enroll"))
 
-                # If we have more than one course mode or professional ed is enabled,
-                # then send the user to the choose your track page.
-                # (In the case of professional ed, this will redirect to a page that
-                # funnels users directly into the verification / payment flow)
-                if CourseMode.has_verified_mode(available_modes):
-                    return HttpResponse(
-                        reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
-                    )
+                    # If we have more than one course mode or professional ed is enabled,
+                    # then send the user to the choose your track page.
+                    # (In the case of professional ed, this will redirect to a page that
+                    # funnels users directly into the verification / payment flow)
+                    if CourseMode.has_verified_mode(available_modes):
+                        return HttpResponse(
+                            reverse("course_modes_choose", kwargs={'course_id': unicode(course_id)})
+                        )
 
-                # Otherwise, there is only one mode available (the default)
-                # return HttpResponse()
+                    # Otherwise, there is only one mode available (the default)
+                    # return HttpResponse()
 
             if 'enroll_course_id' in request.session:
                 del request.session['enroll_course_id']

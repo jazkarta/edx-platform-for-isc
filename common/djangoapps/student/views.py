@@ -930,7 +930,14 @@ def change_enrollment(request, check_access=True):
     if action == "enroll":
         try:
             for course_id in course_ids:
-                course = validate_course_for_user_enrollment(user, course_id)
+                try:
+                    course = validate_course_for_user_enrollment(user, course_id)
+                except UserAlreadyEnrolledError:
+                    if multiple_enroll:
+                        pass
+                    else:
+                        raise
+                        
                 if multiple_enroll:
                     # always enroll with default mode for multiple enrollment
                     CourseEnrollment.enroll(user, course.id)

@@ -930,13 +930,8 @@ def change_enrollment(request, check_access=True):
     if action == "enroll":
         try:
             for course_id in course_ids:
-                try:
-                    course = validate_course_for_user_enrollment(user, course_id)
-                except UserAlreadyEnrolledError:
-                    if multiple_enroll:
-                        pass
-                    else:
-                        raise
+
+                course = validate_course_for_user_enrollment(user, course_id, ignore_enrolled=multiple_enroll)
                         
                 if multiple_enroll:
                     # always enroll with default mode for multiple enrollment
@@ -1029,7 +1024,7 @@ def validate_courses_for_enrollment(request):
     return valid_courses
 
 
-def validate_course_for_user_enrollment(user, course_id):
+def validate_course_for_user_enrollment(user, course_id, ignore_enrolled=False):
     # Make sure the course exists
     try:
         course = modulestore().get_course(course_id)
@@ -1051,7 +1046,10 @@ def validate_course_for_user_enrollment(user, course_id):
 
     # check to see if user is currently enrolled in that course
     if CourseEnrollment.is_enrolled(user, course_id):
-        raise UserAlreadyEnrolledError(_("Student is already enrolled"))
+        if ignore_enrolled:
+            return course
+        else:
+            raise UserAlreadyEnrolledError(_("Student is already enrolled"))
 
     return course
 
@@ -1107,11 +1105,8 @@ def learning_path_enrollment(request):
 
     try:
         for course_id in valid_courses:
-            try:
-                course = validate_course_for_user_enrollment(user, course_id)
-                CourseEnrollment.enroll(user, course.id)
-            except UserAlreadyEnrolledError:
-                pass
+            course = validate_course_for_user_enrollment(user, course_id, ignore_enrolled=True)
+            CourseEnrollment.enroll(user, course.id)            
 
     except UserEnrollmentError as e:
         return HttpResponseBadRequest(str(e))

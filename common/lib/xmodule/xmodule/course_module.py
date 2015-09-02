@@ -627,7 +627,7 @@ class CourseFields(object):
             "information unless a student has earned a certificate."
         ),
         scope=Scope.settings,
-        default="end"
+        default="early_with_info"
     )
     course_image = String(
         display_name=_("Course About Page Image"),
@@ -976,7 +976,7 @@ class CourseDescriptor(CourseFields, SequenceDescriptor):
         Return True if it is acceptable to show the student a certificate download link
         """
         show_early = self.certificates_display_behavior in ('early_with_info', 'early_no_info') or self.certificates_show_before_end
-        return show_early or self.has_ended()
+        return show_early or self.has_ended()`
 
     def has_started(self):
         return datetime.now(UTC()) > self.start

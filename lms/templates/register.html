@@ -55,8 +55,10 @@
       });
 
       $('#register-form').on('ajax:success', function(event, json, xhr) {
-        var url = json.redirect_url || "${reverse('dashboard')}";
-        location.href = url;
+        if (json.redirect_url) location.href = url;
+        else {
+          $('.status.message.submission-success').addClass('is-shown').focus();
+        }
       });
 
       $('#register-form').on('ajax:error', function(event, jqXHR, textStatus) {
@@ -111,6 +113,11 @@
       <!-- status messages -->
       <div role="alert" class="status message">
         <h3 class="message-title">${_("We're sorry, {platform_name} enrollment is not available in your region").format(platform_name=platform_name)}</h3>
+      </div>
+
+      <div role="alert" class="status message submission-success" tabindex="-1">
+        <h3 class="message-title">${_("Registration succeeded.  Please follow the instructions in 'Next Steps' below to proceed.")} </h3>
+        <ul class="message-copy"> </ul>
       </div>
 
       <div role="alert" class="status message submission-error" tabindex="-1">

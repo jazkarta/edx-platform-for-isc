@@ -91,7 +91,7 @@ from django.utils.http import urlquote_plus
                 <input type="submit" value="Complete Course" />
               </form>
             </div>
-            %else:
+            %elif 'status' in cert and cert['status'] == 'ready':
             <div class="msg-content">
             <h3 class="title">Course Completed</h3>
             <div class="copy"><p>You already have completed this course.</p></div>

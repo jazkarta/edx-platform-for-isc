@@ -80,7 +80,7 @@ from django.utils.http import urlquote_plus
       %if success_cutoff and grade_summary['percent'] > success_cutoff:
         <div id="course-success" class="wrapper-msg success urgency-low">
           <div class="msg">
-            %if cert['status'] != 'ready':
+            %if 'status' in cert and cert['status'] != 'ready':
             <div class="msg-content">
             <h3 class="title">Course Passed</h3>
             <div class="copy"><p>You have enough credits to pass this course. Click on the Complete Course button to receive your final grade.</p></div>

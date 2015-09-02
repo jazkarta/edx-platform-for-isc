@@ -1883,7 +1883,7 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
             return JsonResponse(js, status=500)
 
     dog_stats_api.increment("common.student.account_created")
-    redirect_url = None
+    redirect_url = None  # don't automatically log in.
 
     # Resume the third-party-auth pipeline if necessary.
     if third_party_auth.is_enabled() and pipeline.running(request):

@@ -823,10 +823,10 @@ def try_change_enrollment(request):
     It should not interrupt a successful registration or login.
     """
     # we may be coming from a login after new account activation was made
-    # as part of a learning path enrollment.  we will have already enrolled if we
-    # have this in the session
+    # as part of a learning path enrollment.  we will have already enrolled if 
+    # we have this in the session
     if 'start_course_id' in request.session:
-        redirect_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+        redirect_url = '/courses/{}/info'.format(request.session['start_course_id'])
         del request.session['start_course_id']
         return redirect_url
 
@@ -971,7 +971,7 @@ def change_enrollment(request, check_access=True):
             if 'enroll_action' in request.session:
                 del request.session['enroll_action']
             if 'start_course_id' in request.session:
-                redir_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+                redir_url = '/courses/{}/info'.format(request.session['start_course_id'])
                 del request.session['start_course_id']
                 return HttpResponse(redir_url)
 
@@ -1058,10 +1058,10 @@ def validate_course_for_user_enrollment(user, course_id, ignore_enrolled=False):
 def learning_path_start(request):
     """
     Enroll user in all courses in learning path.
-    Send a logged-in user to the first module of the chosen course.
+    Send a logged-in user to the info page of the chosen course.
     Send an anonymous user through sign-in/registration process and enroll them
     in all of the courses in the learning path.  Upon completion send them
-    to the first module of the chosen course.
+    to the info page of the chosen course.
     """
     start_course_id = request.POST.get('course_id', '')
     if not start_course_id:
@@ -1111,11 +1111,11 @@ def learning_path_enrollment(request):
     except UserEnrollmentError as e:
         return HttpResponseBadRequest(str(e))
 
-    # redirect to first module of chosen course if there is a session variable
-    # storing the requested course_id, or redirect to first module of first course id 
+    # redirect to info page of chosen course if there is a session variable
+    # storing the requested course_id, or redirect to info page of first course id 
     # passed for enrollment
     if 'start_course_id' in request.session:
-        redir_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+        redir_url = '/courses/{}/info'.format(request.session['start_course_id'])
         del request.session['start_course_id']
         return HttpResponse(redir_url)
     else:
@@ -2031,7 +2031,7 @@ def activate_account(request, key):
 
         # for enrollment via learning path 'Go to this course', redirect to courseware of that course
         if 'start_course_id' in request.session:
-            course_start_url = '/courses/{}/courseware'.format(request.session['start_course_id'])
+            course_start_url = '/courses/{}/info'.format(request.session['start_course_id'])
         else:
             course_start_url = ''
            

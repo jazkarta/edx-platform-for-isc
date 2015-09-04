@@ -57,6 +57,7 @@
       $('#register-form').on('ajax:success', function(event, json, xhr) {
         if (json.redirect_url) location.href = url;
         else {
+          $('.status.message.submission-error').removeClass('is-shown');
           $('.status.message.submission-success').addClass('is-shown').focus();
         }
       });
@@ -64,6 +65,7 @@
       $('#register-form').on('ajax:error', function(event, jqXHR, textStatus) {
         toggleSubmitButton(true);
         json = $.parseJSON(jqXHR.responseText);
+        $('.status.message.submission-success').removeClass('is-shown');
         $('.status.message.submission-error').addClass('is-shown').focus();
         $('.status.message.submission-error .message-copy').html(json.value).stop().css("display", "block");
         $(".field-error").removeClass('field-error');

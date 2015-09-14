@@ -32,7 +32,7 @@ from markupsafe import escape
 
 from courseware import grades
 from courseware.access import has_access, _adjust_start_date_for_beta_testers
-from courseware.courses import get_courses, get_course, get_studio_url, get_course_with_access, sort_by_announcement
+from courseware.courses import get_courses, get_course, get_studio_url, get_course_with_access, sort_by_announcement, get_courses_by_university
 from courseware.courses import sort_by_start_date
 from courseware.masquerade import setup_masquerade
 from courseware.model_data import FieldDataCache
@@ -105,13 +105,13 @@ def courses(request):
     """
     Render "find courses" page.  The course selection work is done in courseware.courses.
     """
-    courses = get_courses(request.user, request.META.get('HTTP_HOST'))
+    courses = get_courses_by_university(request.user, request.META.get('HTTP_HOST'))
 
-    if microsite.get_value("ENABLE_COURSE_SORTING_BY_START_DATE",
-                           settings.FEATURES["ENABLE_COURSE_SORTING_BY_START_DATE"]):
-        courses = sort_by_start_date(courses)
-    else:
-        courses = sort_by_announcement(courses)
+    # if microsite.get_value("ENABLE_COURSE_SORTING_BY_START_DATE",
+    #                        settings.FEATURES["ENABLE_COURSE_SORTING_BY_START_DATE"]):
+    #     courses = sort_by_start_date(courses)
+    # else:
+    #     courses = sort_by_announcement(courses)
 
     return render_to_response("courseware/courses.html", {'courses': courses})
 

@@ -45,15 +45,18 @@
   </header>
 
   <section class="container">
-    <section class="courses">
-      <ul class="courses-listing">
-	%for course in courses:
-        <li class="courses-listing-item">
-          <%include file="../course.html" args="course=course" />
-        </li>
+        %for university in courses:
+      <section class="courses">
+        <h2>${university}</h2>
+        <ul class="courses-listing">
+        %for course in courses[university]:
+          <li class="courses-listing-item">
+            <%include file="../course.html" args="course=course" />
+          </li>
         %endfor
-      </ul>
+        </ul>
     </section>
+    %endfor
   </section>
 
 </section>

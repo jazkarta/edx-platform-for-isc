@@ -2025,7 +2025,9 @@ def activate_account(request, key):
         # Enroll student in any pending courses he/she may have if auto_enroll flag is set
         student = User.objects.filter(id=regs[0].user_id)
         if student:
-            ceas = CourseEnrollmentAllowed.objects.filter(email=student[0].email).order_by('created')
+            # can't order by created b/c we aren't using datetime(6) for the field and with
+            # multiple enrollments at a time (for Learnig Paths) we won't have enough precision
+            ceas = CourseEnrollmentAllowed.objects.filter(email=student[0].email).order_by('id')
             for cea in ceas:
                 if cea.auto_enroll:
                     CourseEnrollment.enroll(student[0], cea.course_id)

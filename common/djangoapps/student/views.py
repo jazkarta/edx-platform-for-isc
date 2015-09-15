@@ -1078,6 +1078,7 @@ def learning_path_enrollment(request):
     Send an anonymous user through sign-in/registration process and enroll them in all
     POSTed course ids
     """
+
     user = request.user
     courses_param = request.POST.get('course_id', '')
     if not courses_param:
@@ -2024,7 +2025,7 @@ def activate_account(request, key):
         # Enroll student in any pending courses he/she may have if auto_enroll flag is set
         student = User.objects.filter(id=regs[0].user_id)
         if student:
-            ceas = CourseEnrollmentAllowed.objects.filter(email=student[0].email)
+            ceas = CourseEnrollmentAllowed.objects.filter(email=student[0].email).order_by('created')
             for cea in ceas:
                 if cea.auto_enroll:
                     CourseEnrollment.enroll(student[0], cea.course_id)

@@ -22,6 +22,7 @@ from courseware.access import has_access, get_user_role
 from courseware.masquerade import setup_masquerade
 from courseware.model_data import FieldDataCache, DjangoKeyValueStore
 from courseware.models import StudentModule
+from courseware.signals import grading_event
 from lms.djangoapps.lms_xblock.field_data import LmsFieldData
 from lms.djangoapps.lms_xblock.runtime import LmsModuleSystem, unquote_slashes, quote_slashes
 from lms.djangoapps.lms_xblock.models import XBlockAsidesConfig
@@ -450,6 +451,11 @@ def get_module_system_for_user(user, field_data_cache,
         student_module.max_grade = event.get('max_value')
         # Save all changes to the underlying KeyValueStore
         student_module.save()
+
+        # signal allows a hook for Marketo integration that's more specific than 
+        # using StudentModule.post_save(), otherwise our receiver gets called too many times
+        grading_event.send(sender=student_module, module=student_module, 
+                           grade=student_module.grade, max_grade=student_module.max_grade)
 
         # Bin score into range and increment stats
         score_bucket = get_score_bucket(student_module.grade, student_module.max_grade)

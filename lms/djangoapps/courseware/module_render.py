@@ -452,9 +452,8 @@ def get_module_system_for_user(user, field_data_cache,
         # Save all changes to the underlying KeyValueStore
         student_module.save()
 
-        # signal allows a hook for Marketo integration that's more specific than 
-        # using StudentModule.post_save(), otherwise our receiver gets called too many times
-        grading_event.send(sender=student_module, module=student_module, 
+        # emit a Signal so we can handle grading events with extra processing
+        grading_event.send(sender=student_module, module=student_module,
                            grade=student_module.grade, max_grade=student_module.max_grade)
 
         # Bin score into range and increment stats

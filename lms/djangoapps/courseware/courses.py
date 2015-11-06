@@ -395,8 +395,7 @@ def get_courses_by_custom_grouping(user, domain=None):
 
     for group in course_groups.keys():
         if len(course_groups[group]) == 0:
-            # del course_groups[group]
-            pass
+            del course_groups[group]
 
     return course_groups
 

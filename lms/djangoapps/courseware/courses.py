@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from fs.errors import ResourceNotFoundError
 import logging
 import inspect
@@ -339,7 +339,13 @@ def get_courses_by_university(user, domain=None):
     for course in visible_courses:
         universities[course.org].append(course)
 
-    return universities
+    # we will return them ordered by reverse alpha... get around Mako issues
+    # specific to ISC.
+    rev_lower_keys = sorted(universities.keys(), key=lambda k: k.lower(), reverse=True)
+    ordered = OrderedDict()
+    for k in rev_lower_keys:
+        ordered[k] = universities[k]
+    return ordered
 
 
 def get_courses(user, domain=None):
@@ -358,6 +364,41 @@ def get_courses(user, domain=None):
     courses = sorted(courses, key=lambda course: course.number)
 
     return courses
+
+
+def get_courses_by_custom_grouping(user, domain=None):
+    '''
+    Returns dict of lists of courses available, keyed by a custom course group name.
+    Visible courses not found in a specified group on the microsite will be returned
+    in a list keyed by 'ungrouped'.
+    '''
+    # TODO: Clean up how 'error' is done.
+    # filter out any courses that errored.
+
+    visible_courses = get_courses(user, domain)
+    grouping_map = microsite.get_value("custom_course_group_map", None)
+    if not grouping_map:
+        return {'': visible_courses}
+
+    # we use the order in which the keys are specified in microsite configuration
+    items = OrderedDict(dict.fromkeys(grouping_map.keys(), [])).items()
+    items.reverse()
+    course_groups = OrderedDict(items)
+
+    course_groups['ungrouped'] = []
+    for course in visible_courses:
+        for group in grouping_map:
+            if course.id in group:
+                course_groups[group].append(course)
+                break
+        course_groups['ungrouped'].append(course)
+
+    for group in course_groups.keys():
+        if len(course_groups[group]) == 0:
+            # del course_groups[group]
+            pass
+
+    return course_groups
 
 
 def sort_by_announcement(courses):

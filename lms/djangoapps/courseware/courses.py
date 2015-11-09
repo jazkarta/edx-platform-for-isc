@@ -386,12 +386,17 @@ def get_courses_by_custom_grouping(user, domain=None):
     course_groups = OrderedDict(items)
 
     course_groups['ungrouped'] = []
+
     for course in visible_courses:
+        found = False
         for group in grouping_map:
-            if course.id in group:
-                course_groups[group].append(course)
+            if course.id.to_deprecated_string() in grouping_map[group]:
+                # can't use append here with OrderedDict
+                course_groups[group] = course_groups[group] + [course]
+                found = True
                 break
-        course_groups['ungrouped'].append(course)
+        if not found:
+            course_groups['ungrouped'] = course_groups['ungrouped'] + [course]
 
     for group in course_groups.keys():
         if len(course_groups[group]) == 0:

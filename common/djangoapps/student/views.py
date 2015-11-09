@@ -152,9 +152,9 @@ def index(request, extra_context=None, user=AnonymousUser()):
         domain = request.META.get('HTTP_HOST')
 
     # allow microsites to specify ordering/grouping logic for courses
-    if microsite.get_value("ENABLE_COURSE_SORTING_BY_CUSTOM_GROUP", False):
-        courses = get_courses_by_custom_grouping(user, domain=domain)
-    elif microsite.get_value("ENABLE_COURSE_SORTING_BY_UNIVERSITY", False):
+    # if microsite.get_value("ENABLE_COURSE_SORTING_BY_CUSTOM_GROUP", False):
+        # courses = get_courses_by_custom_grouping(user, domain=domain)
+    if microsite.get_value("ENABLE_COURSE_SORTING_BY_UNIVERSITY", False):
         courses = get_courses_by_university(user, domain=domain)
     else:
         courses = get_courses(user, domain=domain)

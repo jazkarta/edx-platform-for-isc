@@ -1712,9 +1712,16 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
         else:
             min_length = 2
 
+        # if a username is missing, auto-generate one from the email address
+        # and populate the field
+        try:
+            username_suggest = re.sub(r'[^a-zA-Z0-9]', '', post_vars.get('email').split('@')[0])
+        except AttributeError:
+            username_suggest = ''
+
         if field_name not in post_vars or len(post_vars[field_name]) < min_length:
             error_str = {
-                'username': _('Username must be minimum of two characters long'),
+                'username': _('Username must be minimum of two characters long.  We\'ve suggested the username {0} in the form below'.format(username_suggest)),
                 'email': _('A properly formatted e-mail is required'),
                 'name': _('Your legal name must be a minimum of two characters long'),
                 'password': _('A valid password is required'),
@@ -1733,8 +1740,11 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
                 js['value'] = error_str[field_name]
             else:
                 js['value'] = _('You are missing one or more required fields')
+            if username_suggest:
+                js['field_suggest'] = username_suggest
 
             js['field'] = field_name
+
             return JsonResponse(js, status=400)
 
         max_length = 75

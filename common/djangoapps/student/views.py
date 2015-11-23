@@ -1634,6 +1634,7 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
     js = {'success': False}  # pylint: disable-msg=invalid-name
 
     post_vars = post_override if post_override else request.POST
+    post_vars = dict(post_vars.items())
 
     # allow for microsites to define their own set of required/optional/hidden fields
     extra_fields = microsite.get_value(
@@ -1712,40 +1713,44 @@ def create_account(request, post_override=None):  # pylint: disable-msg=too-many
         else:
             min_length = 2
 
-        # if a username is missing, auto-generate one from the email address
-        # and populate the field
-        try:
-            username_suggest = re.sub(r'[^a-zA-Z0-9]', '', post_vars.get('email').split('@')[0])
-        except AttributeError:
-            username_suggest = ''
-
         if field_name not in post_vars or len(post_vars[field_name]) < min_length:
-            error_str = {
-                'username': _('Username must be minimum of two characters long.  We\'ve suggested the username {0} in the form below'.format(username_suggest)),
-                'email': _('A properly formatted e-mail is required'),
-                'name': _('Your legal name must be a minimum of two characters long'),
-                'password': _('A valid password is required'),
-                'terms_of_service': _('Accepting Terms of Service is required'),
-                'honor_code': _('Agreeing to the Honor Code is required'),
-                'level_of_education': _('A level of education is required'),
-                'gender': _('Your gender is required'),
-                'year_of_birth': _('Your year of birth is required'),
-                'mailing_address': _('Your mailing address is required'),
-                'goals': _('A description of your goals is required'),
-                'city': _('A city is required'),
-                'country': _('A country is required')
-            }
 
-            if field_name in error_str:
-                js['value'] = error_str[field_name]
+            # if a username is missing, auto-generate one from the email address
+            # and populate the field
+            if field_name == 'username':
+                try:
+                    post_vars['username'] = re.sub(r'[^a-zA-Z0-9]', '', post_vars.get('email').split('@')[0])
+                except AttributeError:
+                    error_str = _('Username must be minimum of two characters long.')
+                    js['value'] = error_str
+                    return JsonResponse(js, status=400)
+
             else:
-                js['value'] = _('You are missing one or more required fields')
-            if username_suggest:
-                js['field_suggest'] = username_suggest
 
-            js['field'] = field_name
+                error_str = {
+                    'username': _('Username must be minimum of two characters long.'),
+                    'email': _('A properly formatted e-mail is required'),
+                    'name': _('Your legal name must be a minimum of two characters long'),
+                    'password': _('A valid password is required'),
+                    'terms_of_service': _('Accepting Terms of Service is required'),
+                    'honor_code': _('Agreeing to the Honor Code is required'),
+                    'level_of_education': _('A level of education is required'),
+                    'gender': _('Your gender is required'),
+                    'year_of_birth': _('Your year of birth is required'),
+                    'mailing_address': _('Your mailing address is required'),
+                    'goals': _('A description of your goals is required'),
+                    'city': _('A city is required'),
+                    'country': _('A country is required')
+                }
 
-            return JsonResponse(js, status=400)
+                if field_name in error_str:
+                    js['value'] = error_str[field_name]
+                else:
+                    js['value'] = _('You are missing one or more required fields')
+               
+                js['field'] = field_name
+
+                return JsonResponse(js, status=400)
 
         max_length = 75
         if field_name == 'username':

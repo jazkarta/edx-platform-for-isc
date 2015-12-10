@@ -116,6 +116,8 @@ from openedx.core.djangoapps.user_api.api import profile as profile_api
 import analytics
 from eventtracking import tracker
 
+from student.signals import va_enrollment_event
+
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -969,6 +971,10 @@ def change_enrollment(request, check_access=True):
                     # Otherwise, there is only one mode available (the default)
                     # return HttpResponse()
 
+            if 'va_lpath_enrollment' in request.session:
+                # send signal for Marketo hook
+                va_enrollment_event.send(sender=User, student=user)
+                del request.session['va_lpath_enrollment']
             if 'enroll_course_id' in request.session:
                 del request.session['enroll_course_id']
             if 'enroll_action' in request.session:
@@ -977,7 +983,7 @@ def change_enrollment(request, check_access=True):
                 redir_url = '/courses/{}/info'.format(request.session['start_course_id'])
                 del request.session['start_course_id']
                 return HttpResponse(redir_url)
-
+            
             return HttpResponse()
 
         except UserEnrollmentError as e:
@@ -1096,6 +1102,7 @@ def learning_path_enrollment(request):
         # pathways to registration after trying to enroll in the learning path courses
         request.session['enrollment_course_id'] = courses_param
         request.session['enrollment_action'] = "enroll"
+        request.session['va_lpath_enrollment'] = 1
         return HttpResponse(login_url)
 
     else:
@@ -1110,7 +1117,10 @@ def learning_path_enrollment(request):
     try:
         for course_id in valid_courses:
             course = validate_course_for_user_enrollment(user, course_id, ignore_enrolled=True)
-            CourseEnrollment.enroll(user, course.id)            
+            CourseEnrollment.enroll(user, course.id)
+
+        # send signal for Marketo hook
+        va_enrollment_event.send(sender=User, student=user)
 
     except UserEnrollmentError as e:
         return HttpResponseBadRequest(str(e))
@@ -2050,6 +2060,12 @@ def activate_account(request, key):
             for cea in ceas:
                 if cea.auto_enroll:
                     CourseEnrollment.enroll(student[0], cea.course_id)
+
+        # notify Marketo if we have a session var for VA Learning Path
+        if 'va_lpath_enrollment' in request.session:
+                # send signal for Marketo hook
+                va_enrollment_event.send(sender=User, student=student[0])
+                del request.session['va_lpath_enrollment']
 
         # for enrollment via learning path 'Go to this course', redirect to courseware of that course
         if 'start_course_id' in request.session:

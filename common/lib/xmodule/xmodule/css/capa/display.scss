@@ -622,6 +622,7 @@ div.problem {
       height: ($baseline*2);
       vertical-align: middle;
       font-weight: 600;
+      display: inline !important;
     }
 
     .save {

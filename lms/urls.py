@@ -555,6 +555,9 @@ if settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
         url(r'^login_oauth_token/(?P<backend>[^/]+)/$', 'student.views.login_oauth_token'),
     )
 
+# InterSystems Marketo
+if settings.FEATURES.get('ENABLE_MARKETO_INTEGRATION'):
+    urlpatterns += (url(r'', include('edxmarketo.urls')),)
 
 urlpatterns = patterns(*urlpatterns)
 
